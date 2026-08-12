@@ -1,0 +1,21 @@
+# Dependencies and build output
+node_modules/
+.next/
+.wrangler/
+dist/
+coverage/
+
+# Python environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local configuration and generated media
+.env
+.env.*
+!.env.example
+data/
+
+# Isolated feature worktrees
+.worktrees/
