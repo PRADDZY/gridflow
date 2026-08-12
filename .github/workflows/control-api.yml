@@ -1,0 +1,61 @@
+name: Control API
+
+on:
+  push:
+    paths:
+      - "services/control-api/**"
+      - ".github/workflows/control-api.yml"
+  pull_request:
+    paths:
+      - "services/control-api/**"
+      - ".github/workflows/control-api.yml"
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy the Control API after validation"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/control-api
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          working-directory: services/control-api
+      - run: uv sync --all-groups
+      - run: uv run python -m unittest discover -s tests -v
+      - run: uv run pywrangler sync
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    needs: validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/control-api
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          working-directory: services/control-api
+      - run: uv sync --all-groups
+      - run: uv run pywrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -1,0 +1,4 @@
+name = "gridflow-control-api"
+main = "src/worker.py"
+compatibility_date = "2026-08-11"
+compatibility_flags = ["python_workers"]

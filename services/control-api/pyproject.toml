@@ -1,0 +1,17 @@
+[project]
+name = "gridflow-control-api"
+version = "0.1.0"
+description = "Confidence-aware queue-safety recommendation API for GridFlow"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "pydantic>=2.10,<3",
+]
+
+[dependency-groups]
+dev = [
+    "uvicorn>=0.30,<1",
+    "workers-py",
+    "workers-runtime-sdk",
+]
