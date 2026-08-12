@@ -53,9 +53,15 @@ The API reads a Cloudflare binding in the Worker and uses the process
 environment only for native local development.
 
 `pywrangler` bundles this Worker for Cloudflare. That package step is checked
-by the Ubuntu GitHub Action in this repository because current native Windows
-uv/Pyodide tooling cannot install the wasm virtual environment. Run
-`uv run pywrangler deploy` from Linux or the Ubuntu deployment workflow.
+by the Ubuntu GitHub Action in this repository. On Windows, prepare the same
+locked Python 3.13 Pyodide bundle directly, then deploy with Wrangler:
+
+```powershell
+.\scripts\sync-windows-vendor.ps1
+npx.cmd wrangler deploy
+```
+
+Run `uv run pywrangler deploy` from Linux or the Ubuntu deployment workflow.
 
 Cloudflare's Python Workers are currently beta and require the
 `python_workers` compatibility flag in `wrangler.toml`.
