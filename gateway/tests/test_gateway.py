@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gridflow_gateway.cli import app
+from gridflow_gateway.cli import app, monitor_reference_samples, run_reference_monitor
 from gridflow_gateway.control_api import ControlApiClient
 from gridflow_gateway.detection import summarize_vehicle_detections
 from gridflow_gateway.flow import RollingVehicleFlow
@@ -211,3 +211,13 @@ class GatewayTests(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0, result.output)
         monitor.assert_awaited_once_with(settings=SETTINGS, once=True)
+
+    def test_monitor_command_delegates_to_the_reference_pipeline(self) -> None:
+        async def invoke() -> None:
+            with patch("gridflow_gateway.cli.run_reference_monitor", new_callable=AsyncMock) as monitor:
+                await monitor_reference_samples(settings=SETTINGS, once=True)
+            monitor.assert_awaited_once()
+            self.assertEqual(monitor.await_args.kwargs["settings"], SETTINGS)
+            self.assertTrue(monitor.await_args.kwargs["once"])
+
+        asyncio.run(invoke())

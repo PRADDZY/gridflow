@@ -4,7 +4,7 @@ import json
 import typer
 
 from gridflow_gateway.models import ReferenceGatewaySettings
-from gridflow_gateway.pipeline import monitor_reference
+from gridflow_gateway.pipeline import monitor_reference as run_reference_monitor
 
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -29,7 +29,7 @@ def monitor_reference(
 
 
 async def monitor_reference_samples(*, settings: ReferenceGatewaySettings, once: bool) -> None:
-    await monitor_reference(
+    await run_reference_monitor(
         settings=settings,
         once=once,
         on_sample=lambda observation: typer.echo(json.dumps(observation, indent=2, sort_keys=True)),
