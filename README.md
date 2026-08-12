@@ -41,6 +41,9 @@ Cloudflare FastAPI Worker -> event Durable Object -> controller dashboard
   never raw queue data.
 - Dashboard read and action tokens are separate. Gateway ingress is protected
   by a distinct short-lived HMAC signature.
+- The optional synthetic gateway mode exists only to test the signed control
+  loop. It labels synthetic estimates in the model metadata and must never be
+  used for a live event decision.
 
 ## Run locally
 
@@ -80,6 +83,13 @@ uv run python -m unittest discover -s tests -v
    [gateway/README.md](gateway/README.md).
 5. Complete camera placement, calibration, privacy review, controller runbook
    training, and a supervised dry run before live event use.
+
+## Deployed demo mode
+
+For the test deployment, configure `GRIDFLOW_DEMO_MODE=true` and a
+`GRIDFLOW_DEMO_CONTROLLER_ID`. This deliberately bypasses Cloudflare Access
+only for the synthetic demo and must be removed before any live event. The
+demo is not a production-ready safety system.
 
 ## Demo media
 
