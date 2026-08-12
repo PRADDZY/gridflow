@@ -27,6 +27,24 @@ The gateway rejects malformed inference responses and does not post a partial
 observation. The Control API separately downgrades stale, low-confidence, or
 disagreeing estimates to controller review.
 
+## Test environment
+
+The repository also includes a synthetic submission path for a non-production
+demo. It does not invoke a camera or model and marks both estimates as
+`synthetic-*`; it exists to exercise the signed ingestion and controller
+workflow without presenting test data as vision output.
+
+```powershell
+$env:CONTROL_API_URL = "https://your-control-api.workers.dev"
+$env:INGESTION_HMAC_SECRET = "the-demo-ingress-secret"
+uv run gridflow-gateway submit-synthetic
+```
+
+For an RTSP transport-only test, use a local MediaMTX server and publish a
+test stream to `rtsp://localhost:8554/gridflow-demo`. MediaMTX supports RTSP
+publish/read paths and is appropriate for validating the gateway's RTSP
+boundary; it does not make the synthetic test data production-safe.
+
 ## Run
 
 ```powershell

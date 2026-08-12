@@ -2,12 +2,12 @@ from typing import Any
 
 import httpx
 
-from gridflow_gateway.models import GatewaySettings, QueueObservation
+from gridflow_gateway.models import ControlApiSettings, QueueObservation
 from gridflow_gateway.signing import compact_json, signed_headers
 
 
 class ControlApiClient:
-    def __init__(self, settings: GatewaySettings, client: httpx.AsyncClient) -> None:
+    def __init__(self, settings: ControlApiSettings, client: httpx.AsyncClient) -> None:
         self._settings = settings
         self._client = client
 
