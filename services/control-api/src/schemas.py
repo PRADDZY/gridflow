@@ -30,6 +30,7 @@ class QueueObservation(BaseModel):
 
 
 RiskLevel = Literal["stable", "watch", "critical", "review"]
+DecisionAction = Literal["approve", "hold"]
 
 
 class Recommendation(BaseModel):
@@ -54,3 +55,34 @@ class Recommendation(BaseModel):
     steward_action: str | None = None
     runbook: list[str]
     reason_codes: list[str]
+
+
+class ControllerDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recommendation_id: UUID
+    action: DecisionAction
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ControllerDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision_id: UUID = Field(default_factory=uuid4)
+    event_id: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9-]+$")
+    recommendation_id: UUID
+    action: DecisionAction
+    controller_id: str = Field(
+        min_length=2,
+        max_length=80,
+        pattern=r"^[a-z0-9][a-z0-9._-]+$",
+    )
+    note: str | None = Field(default=None, max_length=500)
+    created_at: datetime
+
+
+class EventSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recommendation: Recommendation
+    decision: ControllerDecision | None = None
