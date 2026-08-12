@@ -82,3 +82,14 @@ sudo systemctl status gridflow-reference-gateway
 
 The service persists only the model cache. It does not persist source frames,
 video segments, or observations.
+
+On an SELinux-enforcing host, label the gateway entrypoint and the uv-managed
+Python executable as `bin_t` before starting the service. The labels below are
+persistent across relabels:
+
+```sh
+sudo semanage fcontext -a -t bin_t '/var/oled/gridflow-reference/\.venv/bin(/.*)?'
+sudo semanage fcontext -a -t bin_t '/home/opc/.local/share/uv/python/cpython-3\.13.14-linux-aarch64-gnu/bin/python3\.13'
+sudo restorecon -Rv /var/oled/gridflow-reference/.venv/bin /home/opc/.local/share/uv/python/cpython-3.13.14-linux-aarch64-gnu/bin/python3.13
+sudo systemctl restart gridflow-reference-gateway
+```
