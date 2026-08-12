@@ -65,3 +65,20 @@ docker compose up --build -d
 For any operational venue deployment, use an authorised camera source and a
 separate, reviewed control path. This reference gateway intentionally has no
 venue-control input or output.
+
+## Direct Linux service deployment
+
+For a small ARM host where a Docker image is impractical, install the project
+with `uv sync --extra vision --all-groups`, place the required configuration in
+`/var/oled/gridflow-reference/.env` with mode `0600`, and install the supplied
+service unit:
+
+```sh
+sudo install -o root -g root -m 644 deploy/gridflow-reference-gateway.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gridflow-reference-gateway
+sudo systemctl status gridflow-reference-gateway
+```
+
+The service persists only the model cache. It does not persist source frames,
+video segments, or observations.
