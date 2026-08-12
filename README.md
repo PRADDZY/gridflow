@@ -41,6 +41,9 @@ Cloudflare FastAPI Worker -> event Durable Object -> controller dashboard
   never raw queue data.
 - Dashboard read and action tokens are separate. Gateway ingress is protected
   by a distinct short-lived HMAC signature.
+- In the deployed Cloudflare environment, the dashboard uses a Worker service
+  binding to the Control API; it does not make an internal call through the
+  public `workers.dev` hostname.
 - The optional synthetic gateway mode exists only to test the signed control
   loop. It labels synthetic estimates in the model metadata and must never be
   used for a live event decision.

@@ -1,4 +1,5 @@
 import { controllerIdentity } from "@/lib/controller-access";
+import { fetchControlApi } from "@/lib/control-api";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const controlApiUrl = process.env.CONTROL_API_URL;
   const controllerToken = process.env.CONTROL_API_READ_TOKEN;
 
-  if (!controlApiUrl || !controllerToken) {
+  if (!controllerToken) {
     return Response.json(
       { detail: "Live control API is not configured." },
       { status: 503, headers: { "cache-control": "no-store" } },
@@ -24,8 +24,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(
-      `${controlApiUrl.replace(/\/$/, "")}/v1/events/${EVENT_ID}/current`,
+    const response = await fetchControlApi(
+      `/v1/events/${EVENT_ID}/current`,
       {
         cache: "no-store",
         headers: { "x-gridflow-controller-token": controllerToken },

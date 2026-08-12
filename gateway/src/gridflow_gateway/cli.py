@@ -5,7 +5,7 @@ import typer
 
 from gridflow_gateway.frame import capture_rtsp_frame
 from gridflow_gateway.models import GatewaySettings, SyntheticGatewaySettings
-from gridflow_gateway.pipeline import analyze_and_submit, submit_synthetic
+from gridflow_gateway.pipeline import analyze_and_submit, submit_synthetic as submit_synthetic_observation
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -50,7 +50,7 @@ def submit_synthetic(
     """Submit a marked synthetic observation to a demo environment."""
     settings = SyntheticGatewaySettings.from_environment()
     recommendation = asyncio.run(
-        submit_synthetic(
+        submit_synthetic_observation(
             settings=settings,
             event_id=event_id,
             camera_id=camera_id,

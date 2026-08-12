@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 import httpx
+from typer.testing import CliRunner
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -14,6 +15,7 @@ from gridflow_gateway.huggingface import HuggingFaceVisionClient, InferenceRespo
 from gridflow_gateway.models import GatewaySettings, SyntheticGatewaySettings
 from gridflow_gateway.pipeline import submit_synthetic
 from gridflow_gateway.signing import compact_json, signed_headers
+from gridflow_gateway.cli import app
 
 
 SETTINGS = GatewaySettings(
@@ -94,3 +96,19 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(observation.detector.people_count, 432)
         self.assertEqual(observation.density.model, "synthetic-density-estimator")
         self.assertEqual(observation.density.people_count, 440)
+
+    def test_synthetic_cli_invokes_the_pipeline_function(self) -> None:
+        runner = CliRunner()
+        with patch("gridflow_gateway.cli.SyntheticGatewaySettings.from_environment") as settings_from_environment:
+            settings_from_environment.return_value = SyntheticGatewaySettings(
+                control_api_url="https://control.example.com",
+                ingestion_hmac_secret="not-a-real-production-secret",
+            )
+            with patch("gridflow_gateway.cli.submit_synthetic_observation", new_callable=AsyncMock) as submit:
+                submit.return_value = {"risk": "critical"}
+
+                result = runner.invoke(app, ["submit-synthetic"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn('"risk": "critical"', result.output)
+        submit.assert_awaited_once()

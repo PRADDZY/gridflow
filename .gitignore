@@ -1,7 +1,9 @@
 # Dependencies and build output
 node_modules/
 .next/
+.open-next/
 .wrangler/
+cloudflare-env.d.ts
 dist/
 coverage/
 
@@ -16,6 +18,7 @@ __pycache__/
 .env.*
 !.env.example
 data/
+.vendor-probe/
 
 # Isolated feature worktrees
 .worktrees/

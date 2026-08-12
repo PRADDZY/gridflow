@@ -1,4 +1,5 @@
 import { controllerIdentity } from "@/lib/controller-access";
+import { fetchControlApi } from "@/lib/control-api";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,8 @@ type DecisionInput = {
 };
 
 export async function POST(request: Request) {
-  const controlApiUrl = process.env.CONTROL_API_URL;
   const actionToken = process.env.CONTROL_API_ACTION_TOKEN;
-  if (!controlApiUrl || !actionToken) {
+  if (!actionToken) {
     return jsonError(503, "Controller command delivery is not configured.");
   }
 
@@ -28,8 +28,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const response = await fetch(
-      `${controlApiUrl.replace(/\/$/, "")}/v1/events/${EVENT_ID}/decisions`,
+    const response = await fetchControlApi(
+      `/v1/events/${EVENT_ID}/decisions`,
       {
         method: "POST",
         cache: "no-store",

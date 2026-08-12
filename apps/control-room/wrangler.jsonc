@@ -8,6 +8,12 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "services": [
+    {
+      "binding": "CONTROL_API",
+      "service": "gridflow-control-api"
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
