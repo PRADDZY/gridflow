@@ -38,6 +38,19 @@ async def require_signed_ingress(request: Request) -> None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid ingress signature.")
 
 
+async def require_controller_read_access(request: Request) -> None:
+    env = request.scope.get("env")
+    expected = _binding_value(env, "CONTROLLER_READ_TOKEN")
+    supplied = request.headers.get("x-gridflow-controller-token")
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Controller read access is not configured.",
+        )
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid controller token.")
+
+
 def _binding_value(env: object | None, name: str) -> str | None:
     if env is None:
         return os.environ.get(name)

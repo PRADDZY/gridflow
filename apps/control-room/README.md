@@ -15,6 +15,11 @@ npm.cmd run dev
 Open `http://localhost:3000` for the operator board and
 `http://localhost:3000/display` for the public signage view.
 
+To connect an operational Control API, copy `.env.example` to `.env.local` and
+configure the deployed API URL plus its controller read token. The board polls
+the same-origin `/api/live` route every five seconds, keeping that token out of
+the browser bundle.
+
 ## Cloudflare deployment
 
 This package uses [OpenNext for Cloudflare](https://opennext.js.org/cloudflare).

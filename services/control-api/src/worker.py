@@ -1,6 +1,7 @@
 from workers import WorkerEntrypoint
 
 from api import app
+from state import EventState
 
 
 class Default(WorkerEntrypoint):

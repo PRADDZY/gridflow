@@ -4,6 +4,10 @@ This Cloudflare Python Worker accepts signed queue observations and returns a
 recommendation for a human controller. It is intentionally not an automation
 endpoint: every output has `requires_human_approval: true`.
 
+Accepted recommendations are stored in the event's Durable Object. Controller
+clients can read `GET /v1/events/{event_id}/current` only with the
+`x-gridflow-controller-token` header.
+
 ## Safety policy encoded here
 
 - An observation with a camera age above 25 seconds is `review`, not `critical`.
@@ -24,6 +28,7 @@ x-gridflow-signature: sha256=<HMAC_SHA256("<sent_at>.<raw JSON body>")>
 
 The Worker reads `INGESTION_HMAC_SECRET` from its Cloudflare environment
 bindings and rejects unsigned, bad, or older-than-60-second requests.
+Configure a distinct `CONTROLLER_READ_TOKEN` secret for controller reads.
 
 ## Local development
 

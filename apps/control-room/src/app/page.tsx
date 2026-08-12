@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { demoFeed, queueZones, type RiskLevel } from "@/lib/event-data";
 
 const riskLabel: Record<RiskLevel, string> = {
@@ -26,16 +26,63 @@ const riskLabel: Record<RiskLevel, string> = {
   critical: "Critical",
 };
 
+type LiveRecommendation = {
+  risk: "stable" | "watch" | "critical" | "review";
+  zone_id: string;
+  estimated_people: number;
+  capacity: number;
+  queue_change_per_minute: number;
+  confidence: number;
+  model_agreement: number;
+  camera_age_seconds: number;
+  sign_action: string | null;
+  steward_action: string | null;
+  reason_codes: string[];
+};
+
 export default function Home() {
   const [approved, setApproved] = useState(false);
   const [assigned, setAssigned] = useState(false);
   const [activeTab, setActiveTab] = useState("Live board");
+  const [liveRecommendation, setLiveRecommendation] = useState<LiveRecommendation | null>(null);
   const criticalZone = queueZones[0];
+  const priorityZone = liveRecommendation
+    ? {
+        ...criticalZone,
+        name: liveRecommendation.zone_id.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+        occupancy: liveRecommendation.estimated_people,
+        capacity: liveRecommendation.capacity,
+        trend: liveRecommendation.queue_change_per_minute,
+        freshness: `${Math.round(liveRecommendation.camera_age_seconds)} sec frame`,
+      }
+    : criticalZone;
   const recovery = approved ? 12 : 0;
   const activeZones = useMemo(
     () => queueZones.filter((zone) => zone.risk !== "normal").length,
     [],
   );
+
+  useEffect(() => {
+    let active = true;
+
+    async function refreshLiveRecommendation() {
+      try {
+        const response = await fetch("/api/live", { cache: "no-store" });
+        if (!response.ok) return;
+        const recommendation = (await response.json()) as LiveRecommendation;
+        if (active) setLiveRecommendation(recommendation);
+      } catch {
+        // The static frame remains available while the live service is unavailable.
+      }
+    }
+
+    void refreshLiveRecommendation();
+    const interval = window.setInterval(refreshLiveRecommendation, 5_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   function approveAction() {
     setApproved(true);
@@ -103,8 +150,8 @@ export default function Home() {
         </header>
 
         <div className="incident-strip">
-          <div className="incident-leading"><CircleAlert size={20} /><span>1 critical queue needs a decision</span></div>
-          <span>Source confidence 91%</span>
+          <div className="incident-leading"><CircleAlert size={20} /><span>{liveRecommendation?.risk === "review" ? "1 queue observation needs verification" : "1 critical queue needs a decision"}</span></div>
+          <span>Source confidence {Math.round((liveRecommendation?.confidence ?? 0.91) * 100)}%</span>
           <button type="button" onClick={() => document.getElementById("decision")?.scrollIntoView({ behavior: "smooth" })}>Review now <ChevronRight size={16} /></button>
         </div>
 
@@ -146,18 +193,18 @@ export default function Home() {
             <div className="panel-heading">
               <div>
                 <p className="eyebrow red">Priority alert</p>
-                <h3 id="risk-heading">{criticalZone.name}</h3>
+                <h3 id="risk-heading">{priorityZone.name}</h3>
               </div>
-              <span className="status-critical">Critical</span>
+              <span className="status-critical">{liveRecommendation ? liveRecommendation.risk : "Critical"}</span>
             </div>
             <div className="risk-numbers">
-              <div><span>Occupancy</span><strong>{criticalZone.occupancy}<small> / {criticalZone.capacity}</small></strong></div>
-              <div><span>Queue growth</span><strong>+{criticalZone.trend}<small>% / 5 min</small></strong></div>
+              <div><span>Occupancy</span><strong>{priorityZone.occupancy}<small> / {priorityZone.capacity}</small></strong></div>
+              <div><span>Queue growth</span><strong>{priorityZone.trend >= 0 ? "+" : ""}{priorityZone.trend}<small> / min</small></strong></div>
             </div>
-            <div className="occupancy-scale"><span style={{ width: `${(criticalZone.occupancy / criticalZone.capacity) * 100}%` }} /></div>
-            <div className="evidence-row"><Eye size={17} /><span>Detector and density estimates agree within 7%</span><strong>91%</strong></div>
-            <p className="risk-copy">The south concourse is loading faster than the exit can clear. A queue spillback reaches the grandstand stairs in an estimated 6 minutes.</p>
-            <div className="recommendation"><Route size={19} /><div><span>Recommended response</span><strong>Open Gate 5 and publish the Blue Route</strong></div></div>
+            <div className="occupancy-scale"><span style={{ width: `${Math.min((priorityZone.occupancy / priorityZone.capacity) * 100, 100)}%` }} /></div>
+            <div className="evidence-row"><Eye size={17} /><span>Detector and density estimates agree within {Math.round((1 - (liveRecommendation?.model_agreement ?? 0.93)) * 100)}%</span><strong>{Math.round((liveRecommendation?.confidence ?? 0.91) * 100)}%</strong></div>
+            <p className="risk-copy">{liveRecommendation?.risk === "review" ? "The observation needs live CCTV confirmation before any direction is sent to staff or signage." : "The south concourse is loading faster than the exit can clear. A queue spillback reaches the grandstand stairs in an estimated 6 minutes."}</p>
+            <div className="recommendation"><Route size={19} /><div><span>Recommended response</span><strong>{liveRecommendation?.sign_action ?? liveRecommendation?.steward_action ?? "Open Gate 5 and publish the Blue Route"}</strong></div></div>
             {!approved ? (
               <button className="approve-button" type="button" onClick={approveAction}><Send size={17} /> Approve and publish</button>
             ) : (
@@ -170,7 +217,7 @@ export default function Home() {
           <section className="feed-panel" aria-labelledby="feed-heading">
             <div className="panel-heading">
               <div><p className="eyebrow">Evidence frame</p><h3 id="feed-heading">Cam 04 / South Exit</h3></div>
-              <span className="camera-live"><span /> {criticalZone.freshness}</span>
+              <span className="camera-live"><span /> {priorityZone.freshness}</span>
             </div>
             <div className="feed-image">
               {/* Pexels footage still, used with source attribution in the README. */}

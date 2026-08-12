@@ -45,6 +45,8 @@ class RiskAssessmentTests(unittest.TestCase):
 
         self.assertEqual(result.risk, "critical")
         self.assertTrue(result.requires_human_approval)
+        self.assertEqual(result.capacity, 520)
+        self.assertEqual(result.queue_change_per_minute, 18)
         self.assertIsNotNone(result.sign_action)
         self.assertIn("occupancy_critical", result.reason_codes)
 

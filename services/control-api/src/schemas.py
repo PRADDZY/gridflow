@@ -43,7 +43,9 @@ class Recommendation(BaseModel):
     created_at: datetime
     risk: RiskLevel
     estimated_people: int
+    capacity: int
     occupancy_ratio: float
+    queue_change_per_minute: float
     confidence: float
     model_agreement: float
     camera_age_seconds: float
