@@ -4,9 +4,11 @@ This Cloudflare Python Worker accepts signed queue observations and returns a
 recommendation for a human controller. It is intentionally not an automation
 endpoint: every output has `requires_human_approval: true`.
 
-Accepted recommendations are stored in the event's Durable Object. Controller
-clients can read `GET /v1/events/{event_id}/current` only with the
-`x-gridflow-controller-token` header.
+Accepted recommendations are stored with their current controller decision in
+the event's Durable Object. Controller clients can read
+`GET /v1/events/{event_id}/current` only with the
+`x-gridflow-controller-token` header. It returns an `EventSnapshot` containing
+the recommendation and, if one exists, the decision.
 
 ## Safety policy encoded here
 
@@ -16,6 +18,9 @@ clients can read `GET /v1/events/{event_id}/current` only with the
   80% and queue growth is at least 10 people per minute.
 - `sign_action` and `steward_action` are recommendations. A controller must
   approve and publish them through the operational workflow.
+- A new observation replaces the active snapshot and clears its earlier
+  decision. `POST /v1/events/{event_id}/decisions` rejects decisions that name
+  an older recommendation with `409 Conflict`.
 
 ## Signed ingress contract
 
@@ -28,7 +33,11 @@ x-gridflow-signature: sha256=<HMAC_SHA256("<sent_at>.<raw JSON body>")>
 
 The Worker reads `INGESTION_HMAC_SECRET` from its Cloudflare environment
 bindings and rejects unsigned, bad, or older-than-60-second requests.
-Configure a distinct `CONTROLLER_READ_TOKEN` secret for controller reads.
+Configure distinct `CONTROLLER_READ_TOKEN` and `CONTROLLER_ACTION_TOKEN`
+secrets. Decisions require the action token, a `recommendation_id`, and a
+controller identity supplied by the Access-protected dashboard; the Worker
+records that identity with the decision. The last 100 decisions per event are
+available to authorized controllers at `GET /v1/events/{event_id}/audit`.
 
 ## Local development
 
