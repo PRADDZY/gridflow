@@ -53,6 +53,7 @@ describe("ReferenceAnalytics", () => {
 
     expect(screen.getByText("External reference analytics")).toBeInTheDocument();
     expect(screen.getByText("17")).toBeInTheDocument();
+    expect(screen.getByTestId("venue-map")).toHaveTextContent("venue");
 
     fireEvent.click(screen.getByRole("button", { name: "Camera source" }));
     expect(screen.getByTestId("reference-video")).toHaveTextContent("DQTV17");
