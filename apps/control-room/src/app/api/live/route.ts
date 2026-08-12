@@ -1,8 +1,18 @@
+import { controllerIdentity } from "@/lib/controller-access";
+
 export const dynamic = "force-dynamic";
 
 const EVENT_ID = "monza-2026";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const identity = await controllerIdentity(request);
+  if (typeof identity !== "string") {
+    return Response.json(
+      { detail: identity.detail },
+      { status: identity.status, headers: { "cache-control": "no-store" } },
+    );
+  }
+
   const controlApiUrl = process.env.CONTROL_API_URL;
   const controllerToken = process.env.CONTROL_API_READ_TOKEN;
 

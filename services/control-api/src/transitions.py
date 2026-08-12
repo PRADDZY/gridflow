@@ -6,6 +6,15 @@ def start_recommendation(recommendation: Recommendation) -> EventSnapshot:
     return EventSnapshot(recommendation=recommendation)
 
 
+def record_observation(
+    current: EventSnapshot | None,
+    recommendation: Recommendation,
+) -> EventSnapshot:
+    if current and current.recommendation.observation_id == recommendation.observation_id:
+        return current
+    return start_recommendation(recommendation)
+
+
 def record_controller_decision(
     snapshot: EventSnapshot,
     decision: ControllerDecision,

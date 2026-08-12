@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { demoFeed, queueZones, type RiskLevel } from "@/lib/event-data";
+import { hasPublishedSignAction, type EventSnapshot } from "@/lib/live-state";
 
 const riskLabel: Record<RiskLevel, string> = {
   normal: "Stable",
@@ -26,26 +27,15 @@ const riskLabel: Record<RiskLevel, string> = {
   critical: "Critical",
 };
 
-type LiveRecommendation = {
-  risk: "stable" | "watch" | "critical" | "review";
-  zone_id: string;
-  estimated_people: number;
-  capacity: number;
-  queue_change_per_minute: number;
-  confidence: number;
-  model_agreement: number;
-  camera_age_seconds: number;
-  sign_action: string | null;
-  steward_action: string | null;
-  reason_codes: string[];
-};
-
 export default function Home() {
-  const [approved, setApproved] = useState(false);
   const [assigned, setAssigned] = useState(false);
   const [activeTab, setActiveTab] = useState("Live board");
-  const [liveRecommendation, setLiveRecommendation] = useState<LiveRecommendation | null>(null);
+  const [liveSnapshot, setLiveSnapshot] = useState<EventSnapshot | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const criticalZone = queueZones[0];
+  const liveRecommendation = liveSnapshot?.recommendation ?? null;
+  const approved = hasPublishedSignAction(liveSnapshot);
   const priorityZone = liveRecommendation
     ? {
         ...criticalZone,
@@ -69,8 +59,8 @@ export default function Home() {
       try {
         const response = await fetch("/api/live", { cache: "no-store" });
         if (!response.ok) return;
-        const recommendation = (await response.json()) as LiveRecommendation;
-        if (active) setLiveRecommendation(recommendation);
+        const snapshot = (await response.json()) as EventSnapshot;
+        if (active) setLiveSnapshot(snapshot);
       } catch {
         // The static frame remains available while the live service is unavailable.
       }
@@ -84,9 +74,31 @@ export default function Home() {
     };
   }, []);
 
-  function approveAction() {
-    setApproved(true);
-    setAssigned(true);
+  async function approveAction() {
+    if (!liveRecommendation || isPublishing) return;
+
+    setIsPublishing(true);
+    setDecisionError(null);
+    try {
+      const response = await fetch("/api/decisions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          recommendation_id: liveRecommendation.decision_id,
+          action: "approve",
+        }),
+      });
+      const body = (await response.json()) as EventSnapshot | { detail?: string };
+      if (!response.ok || !("recommendation" in body)) {
+        throw new Error("detail" in body ? body.detail : "The controller decision was not recorded.");
+      }
+      setLiveSnapshot(body);
+      setAssigned(true);
+    } catch (error) {
+      setDecisionError(error instanceof Error ? error.message : "The controller decision was not recorded.");
+    } finally {
+      setIsPublishing(false);
+    }
   }
 
   return (
@@ -205,10 +217,17 @@ export default function Home() {
             <div className="evidence-row"><Eye size={17} /><span>Detector and density estimates agree within {Math.round((1 - (liveRecommendation?.model_agreement ?? 0.93)) * 100)}%</span><strong>{Math.round((liveRecommendation?.confidence ?? 0.91) * 100)}%</strong></div>
             <p className="risk-copy">{liveRecommendation?.risk === "review" ? "The observation needs live CCTV confirmation before any direction is sent to staff or signage." : "The south concourse is loading faster than the exit can clear. A queue spillback reaches the grandstand stairs in an estimated 6 minutes."}</p>
             <div className="recommendation"><Route size={19} /><div><span>Recommended response</span><strong>{liveRecommendation?.sign_action ?? liveRecommendation?.steward_action ?? "Open Gate 5 and publish the Blue Route"}</strong></div></div>
-            {!approved ? (
-              <button className="approve-button" type="button" onClick={approveAction}><Send size={17} /> Approve and publish</button>
-            ) : (
+            {approved ? (
               <div className="approved-state"><CheckCircle2 size={18} /> Response sent to Gate 5 signage and steward channel</div>
+            ) : (
+              <>
+                <button className="approve-button" type="button" onClick={approveAction} disabled={!liveRecommendation || isPublishing}>
+                  <Send size={17} /> {isPublishing ? "Publishing..." : "Approve and publish"}
+                </button>
+                {!liveRecommendation && <p className="decision-note">Awaiting a current signed observation.</p>}
+                {liveSnapshot?.decision?.action === "hold" && <p className="decision-note">A controller hold is active. Signage remains unchanged.</p>}
+                {decisionError && <p className="decision-error" role="alert">{decisionError}</p>}
+              </>
             )}
           </section>
         </div>

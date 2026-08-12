@@ -7,7 +7,7 @@ from uuid import uuid4
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from schemas import ControllerDecision, Recommendation
-from transitions import record_controller_decision, start_recommendation
+from transitions import record_controller_decision, record_observation, start_recommendation
 
 
 NOW = datetime(2026, 8, 12, 8, 0, tzinfo=timezone.utc)
@@ -42,7 +42,7 @@ class ControllerDecisionTransitionTests(unittest.TestCase):
             event_id=active_recommendation.event_id,
             recommendation_id=active_recommendation.decision_id,
             action="approve",
-            controller_id="a.kapoor",
+            controller_id="a.kapoor@gridflow.example",
             created_at=NOW,
         )
 
@@ -58,7 +58,7 @@ class ControllerDecisionTransitionTests(unittest.TestCase):
                 event_id=previous_recommendation.event_id,
                 recommendation_id=previous_recommendation.decision_id,
                 action="approve",
-                controller_id="a.kapoor",
+                controller_id="a.kapoor@gridflow.example",
                 created_at=NOW,
             ),
         )
@@ -68,6 +68,24 @@ class ControllerDecisionTransitionTests(unittest.TestCase):
         self.assertIsNotNone(approved_snapshot.decision)
         self.assertIsNone(refreshed_snapshot.decision)
 
+    def test_replayed_observation_keeps_its_existing_approval(self) -> None:
+        observed_recommendation = recommendation()
+        approved_snapshot = record_controller_decision(
+            start_recommendation(observed_recommendation),
+            ControllerDecision(
+                event_id=observed_recommendation.event_id,
+                recommendation_id=observed_recommendation.decision_id,
+                action="approve",
+                controller_id="a.kapoor@gridflow.example",
+                created_at=NOW,
+            ),
+        )
+        retry = observed_recommendation.model_copy(update={"decision_id": uuid4()})
+
+        retried_snapshot = record_observation(approved_snapshot, retry)
+
+        self.assertEqual(retried_snapshot, approved_snapshot)
+
     def test_rejects_a_decision_for_an_older_recommendation(self) -> None:
         old_recommendation = recommendation()
         active_snapshot = start_recommendation(recommendation())
@@ -75,7 +93,7 @@ class ControllerDecisionTransitionTests(unittest.TestCase):
             event_id=old_recommendation.event_id,
             recommendation_id=old_recommendation.decision_id,
             action="approve",
-            controller_id="a.kapoor",
+            controller_id="a.kapoor@gridflow.example",
             created_at=NOW,
         )
 

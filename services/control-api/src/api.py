@@ -32,7 +32,8 @@ async def create_recommendation(
     recommendation = assess(observation)
     event_state = _event_state(request, observation.event_id)
     if event_state is not None:
-        await event_state.record(recommendation.model_dump(mode="json"))
+        snapshot = await event_state.record(recommendation.model_dump(mode="json"))
+        return Recommendation.model_validate(snapshot["recommendation"])
     return recommendation
 
 
@@ -98,6 +99,21 @@ async def record_decision(
             detail="Could not persist the controller decision.",
         )
     return EventSnapshot.model_validate(result["snapshot"])
+
+
+@app.get("/v1/events/{event_id}/audit", response_model=list[ControllerDecision])
+async def decision_audit(
+    event_id: str,
+    request: Request,
+    _: None = Depends(require_controller_read_access),
+) -> list[ControllerDecision]:
+    event_state = _event_state(request, event_id)
+    if event_state is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Durable event state is not available in this runtime.",
+        )
+    return [ControllerDecision.model_validate(decision) for decision in await event_state.audit()]
 
 
 def _event_state(request: Request, event_id: str):
