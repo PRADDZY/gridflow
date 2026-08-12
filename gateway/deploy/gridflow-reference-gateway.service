@@ -1,0 +1,23 @@
+[Unit]
+Description=GridFlow external reference analytics gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opc
+Group=opc
+WorkingDirectory=/var/oled/gridflow-reference
+EnvironmentFile=/var/oled/gridflow-reference/.env
+Environment=HF_HOME=/var/oled/gridflow-reference/models
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/var/oled/gridflow-reference/.venv/bin/gridflow-gateway monitor-reference
+Restart=always
+RestartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/oled/gridflow-reference
+
+[Install]
+WantedBy=multi-user.target

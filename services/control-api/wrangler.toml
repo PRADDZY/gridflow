@@ -7,6 +7,14 @@ compatibility_flags = ["python_workers", "disable_python_external_sdk"]
 name = "EVENT_STATE"
 class_name = "EventState"
 
+[[durable_objects.bindings]]
+name = "REFERENCE_STATE"
+class_name = "ReferenceState"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["EventState"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["ReferenceState"]

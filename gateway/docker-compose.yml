@@ -1,0 +1,15 @@
+services:
+  reference-gateway:
+    build: .
+    restart: unless-stopped
+    environment:
+      CONTROL_API_URL: ${CONTROL_API_URL:?set CONTROL_API_URL}
+      INGESTION_HMAC_SECRET: ${INGESTION_HMAC_SECRET:?set INGESTION_HMAC_SECRET}
+      REFERENCE_SOURCE_ID: iowa-dq-dqtv17
+      IOWA_CAMERA_ID: DQTV17
+      POLL_INTERVAL_SECONDS: 10
+    volumes:
+      - reference-model-cache:/models
+
+volumes:
+  reference-model-cache:
