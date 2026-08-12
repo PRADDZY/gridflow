@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import AsyncMock, patch
 
 import httpx
 from pydantic import ValidationError
@@ -200,4 +201,13 @@ class GatewayTests(unittest.TestCase):
         result = CliRunner().invoke(app, ["submit-synthetic"])
 
         self.assertEqual(result.exit_code, 2)
-        self.assertIn("unexpected extra argument", result.output)
+        self.assertIn("No such command 'submit-synthetic'", result.output)
+
+    def test_monitor_reference_is_an_explicit_cli_command(self) -> None:
+        with patch("gridflow_gateway.cli.ReferenceGatewaySettings.from_environment") as settings_from_environment:
+            settings_from_environment.return_value = SETTINGS
+            with patch("gridflow_gateway.cli.monitor_reference_samples", new_callable=AsyncMock) as monitor:
+                result = CliRunner().invoke(app, ["monitor-reference", "--once"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        monitor.assert_awaited_once_with(settings=SETTINGS, once=True)

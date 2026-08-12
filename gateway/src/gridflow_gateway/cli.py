@@ -10,6 +10,11 @@ from gridflow_gateway.pipeline import monitor_reference
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 
+@app.callback()
+def gateway() -> None:
+    """Run only the external-reference analytics gateway commands."""
+
+
 @app.command()
 def monitor_reference(
     once: bool = typer.Option(False, help="Capture, infer, and submit one real reference sample."),
