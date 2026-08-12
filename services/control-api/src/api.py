@@ -4,7 +4,14 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from pydantic import ValidationError
 
 from risk import assess
-from schemas import ControllerDecision, ControllerDecisionRequest, EventSnapshot, QueueObservation, Recommendation
+from schemas import (
+    ControllerDecision,
+    ControllerDecisionRequest,
+    EventSnapshot,
+    QueueObservation,
+    Recommendation,
+    ReferenceObservation,
+)
 from security import (
     require_controller_action_access,
     require_controller_read_access,
@@ -35,6 +42,61 @@ async def create_recommendation(
         snapshot = await event_state.record(recommendation.model_dump(mode="json"))
         return Recommendation.model_validate(snapshot["recommendation"])
     return recommendation
+
+
+@app.post("/v1/reference-sources/{source_id}/observations", response_model=ReferenceObservation)
+async def create_reference_observation(
+    source_id: str,
+    observation: ReferenceObservation,
+    request: Request,
+    _: None = Depends(require_signed_ingress),
+) -> ReferenceObservation:
+    if observation.source.source_id != source_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The path source must match the reference observation source.",
+        )
+    reference_state = _reference_state(request, source_id)
+    if reference_state is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Durable reference state is not available in this runtime.",
+        )
+    recorded = await reference_state.record(observation.model_dump(mode="json"))
+    return ReferenceObservation.model_validate(recorded)
+
+
+@app.get("/v1/reference-sources/{source_id}/current", response_model=ReferenceObservation)
+async def current_reference_observation(
+    source_id: str,
+    request: Request,
+    _: None = Depends(require_controller_read_access),
+) -> ReferenceObservation:
+    reference_state = _reference_state(request, source_id)
+    if reference_state is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Durable reference state is not available in this runtime.",
+        )
+    current = await reference_state.current()
+    if current is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No reference observation for this source.")
+    return ReferenceObservation.model_validate(current)
+
+
+@app.get("/v1/reference-sources/{source_id}/history", response_model=list[ReferenceObservation])
+async def reference_history(
+    source_id: str,
+    request: Request,
+    _: None = Depends(require_controller_read_access),
+) -> list[ReferenceObservation]:
+    reference_state = _reference_state(request, source_id)
+    if reference_state is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Durable reference state is not available in this runtime.",
+        )
+    return [ReferenceObservation.model_validate(item) for item in await reference_state.history()]
 
 
 @app.get("/v1/events/{event_id}/current", response_model=EventSnapshot)
@@ -126,4 +188,17 @@ def _event_state(request: Request, event_id: str):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Durable event state is not configured.",
+        ) from exc
+
+
+def _reference_state(request: Request, source_id: str):
+    env = request.scope.get("env")
+    if env is None:
+        return None
+    try:
+        return env.REFERENCE_STATE.getByName(source_id)
+    except AttributeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Durable reference state is not configured.",
         ) from exc

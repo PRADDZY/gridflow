@@ -1,6 +1,7 @@
 from workers import DurableObject
 
-from schemas import ControllerDecision, EventSnapshot, Recommendation
+from reference_history import record_reference_history
+from schemas import ControllerDecision, EventSnapshot, Recommendation, ReferenceObservation
 from transitions import record_controller_decision, record_observation
 
 MAX_RECENT_RECOMMENDATIONS = 30
@@ -48,3 +49,21 @@ class EventState(DurableObject):
 
     async def audit(self) -> list[dict]:
         return await self.ctx.storage.get("decision_history") or []
+
+
+class ReferenceState(DurableObject):
+    """Stores external reference observations separately from venue-risk state."""
+
+    async def record(self, observation: dict) -> dict:
+        serialized = ReferenceObservation.model_validate(observation).model_dump(mode="json")
+        history = await self.ctx.storage.get("history") or []
+        history = record_reference_history(history, serialized)
+        await self.ctx.storage.put("current", serialized)
+        await self.ctx.storage.put("history", history)
+        return serialized
+
+    async def current(self) -> dict | None:
+        return await self.ctx.storage.get("current")
+
+    async def history(self) -> list[dict]:
+        return await self.ctx.storage.get("history") or []

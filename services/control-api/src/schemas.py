@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Literal
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ModelEstimate(BaseModel):
@@ -27,6 +28,59 @@ class QueueObservation(BaseModel):
     queue_change_per_minute: float = Field(ge=-10_000, le=10_000)
     detector: ModelEstimate
     density: ModelEstimate
+
+
+class VehicleClassCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    car: int = Field(ge=0, le=100_000)
+    truck: int = Field(ge=0, le=100_000)
+    bus: int = Field(ge=0, le=100_000)
+    motorcycle: int = Field(ge=0, le=100_000)
+
+    @property
+    def total(self) -> int:
+        return self.car + self.truck + self.bus + self.motorcycle
+
+
+class ReferenceSource(BaseModel):
+    """A public camera used as an external analytics reference, never venue control input."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9-]+$")
+    source_mode: Literal["external_reference"]
+    provider: str = Field(min_length=3, max_length=160)
+    attribution: str = Field(min_length=3, max_length=240)
+    camera_id: str = Field(min_length=3, max_length=80)
+    name: str = Field(min_length=3, max_length=240)
+    route: str = Field(min_length=2, max_length=120)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    video_url: str = Field(min_length=12, max_length=2048)
+
+    @field_validator("video_url")
+    @classmethod
+    def require_http_video_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("video_url must be an HTTPS URL.")
+        return value
+
+
+class ReferenceObservation(BaseModel):
+    """A vehicle-only observation from an explicitly external public traffic camera."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: ReferenceSource
+    captured_at: datetime
+    detector_model: str = Field(min_length=3, max_length=160)
+    detector_revision: str = Field(min_length=1, max_length=160)
+    class_counts: VehicleClassCounts
+    confidence: float = Field(ge=0, le=1)
+    inference_ms: int = Field(ge=0, le=120_000)
+    flow_delta_60s: float = Field(ge=-100_000, le=100_000)
 
 
 RiskLevel = Literal["stable", "watch", "critical", "review"]
