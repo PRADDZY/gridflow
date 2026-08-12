@@ -29,10 +29,18 @@ export function VenueMap({ mode, source }: VenueMapProps) {
       zoom: 13.4,
     });
     map.addControl(new NavigationControl({ showCompass: false }), "top-right");
-    map.on("load", () => setReady(true));
+    map.on("load", () => {
+      map.resize();
+      setReady(true);
+    });
     mapRef.current = map;
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(() => map.resize());
+    resizeObserver?.observe(containerRef.current);
 
     return () => {
+      resizeObserver?.disconnect();
       markerRef.current?.remove();
       markerRef.current = null;
       map.remove();
@@ -47,7 +55,7 @@ export function VenueMap({ mode, source }: VenueMapProps) {
     if (mode === "venue") {
       markerRef.current?.remove();
       markerRef.current = null;
-      map.flyTo({ center: MONZA_CENTER, zoom: 13.4, duration: 180, essential: true });
+      map.jumpTo({ center: MONZA_CENTER, zoom: 13.4 });
       return;
     }
 
@@ -57,7 +65,7 @@ export function VenueMap({ mode, source }: VenueMapProps) {
       .setLngLat([source.longitude, source.latitude])
       .setPopup(new Popup({ offset: 18 }).setText(`${source.provider}: ${source.camera_id}`))
       .addTo(map);
-    map.flyTo({ center: [source.longitude, source.latitude], zoom: 14.2, duration: 180, essential: true });
+    map.jumpTo({ center: [source.longitude, source.latitude], zoom: 14.2 });
   }, [mode, ready, source]);
 
   return <div className="map-canvas" ref={containerRef} aria-label="Geographic reference map" />;
