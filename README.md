@@ -1,17 +1,77 @@
 # GridFlow
 
-GridFlow is a race-day queue-safety control room for Grand Prix venues.
+GridFlow is a race-day queue-safety control room for Grand Prix venues. It
+turns approved CCTV observations into confidence-aware recommendations for an
+event controller, steward coordination, and digital signage. It is decision
+support: models never instruct staff or publish signage on their own.
 
-It turns approved CCTV observations into confidence-aware queue-risk alerts,
-human-approved steward runbooks, and live digital-signage updates. The project
-uses Hugging Face vision models for person detection and dense-crowd estimation,
-while Cloudflare hosts the application, event state, and operational audit trail.
+## What is implemented
 
-## Status
+```text
+Approved RTSP camera
+        |
+Venue gateway -> Hugging Face detector + density endpoints
+        |
+Signed observation
+        |
+Cloudflare FastAPI Worker -> event Durable Object -> controller dashboard
+```
 
-Initial implementation in progress.
+- `apps/control-room`: Next.js operator board and public display surface,
+  deployed with OpenNext for Cloudflare.
+- `services/control-api`: FastAPI Python Worker. It verifies HMAC-signed
+  ingress, fails closed on stale or uncertain evidence, and stores the latest
+  recommendation per event in a Durable Object.
+- `gateway`: venue-side RTSP capture, Hugging Face endpoint client, response
+  validation, and signed Control API submission.
 
-## Source Brief
+## Safety boundaries
 
-The supplied hackathon brief is retained as
-`8a6e32e7-ff3e-4827-ba14-89e12bfc52eb.pdf`.
+- Camera frames stay at the venue gateway except for the configured, approved
+  Hugging Face inference endpoints. Camera credentials never enter Cloudflare.
+- A camera older than 25 seconds, low model confidence, or detector/density
+  disagreement results in `review`, not an operational directive.
+- Every recommendation declares `requires_human_approval: true`.
+- Dashboard reads are protected with a separate controller token. Gateway
+  ingress is protected by a separate short-lived HMAC signature.
+
+## Run locally
+
+```powershell
+cd apps/control-room
+npm.cmd install
+npm.cmd run dev
+```
+
+The operator board is at `http://localhost:3000`; the signage page is at
+`http://localhost:3000/display`.
+
+```powershell
+cd services/control-api
+uv sync --all-groups
+uv run python -m unittest discover -s tests -v
+
+cd ..\..\gateway
+uv sync
+uv run python -m unittest discover -s tests -v
+```
+
+## Production handoff
+
+1. Deploy the Control API from Linux or use the manual GitHub Actions workflow
+   after setting `CLOUDFLARE_API_TOKEN` as a repository secret.
+2. Configure the deployed API with distinct `INGESTION_HMAC_SECRET` and
+   `CONTROLLER_READ_TOKEN` secrets.
+3. Configure the control room's `CONTROL_API_URL` and
+   `CONTROL_API_READ_TOKEN` secrets.
+4. Create authenticated Hugging Face Inference Endpoints for the detector and
+   density model, then configure the venue gateway environment documented in
+   [gateway/README.md](gateway/README.md).
+5. Complete camera placement, calibration, privacy review, controller runbook
+   training, and a supervised dry run before live event use.
+
+## Demo media
+
+The current board includes a Pexels queue-video still solely for the visual
+demo. Production use replaces it with an approved camera gateway. The source
+brief is retained as `8a6e32e7-ff3e-4827-ba14-89e12bfc52eb.pdf`.

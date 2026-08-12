@@ -19,3 +19,6 @@ data/
 
 # Isolated feature worktrees
 .worktrees/
+
+# Local C3 fallback generated while scaffolding; not part of GridFlow.
+/apps/dashboard/
