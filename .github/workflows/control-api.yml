@@ -1,13 +1,17 @@
-name: Control API
+name: GridFlow validation
 
 on:
   push:
     paths:
       - "services/control-api/**"
+      - "gateway/**"
+      - "apps/control-room/**"
       - ".github/workflows/control-api.yml"
   pull_request:
     paths:
       - "services/control-api/**"
+      - "gateway/**"
+      - "apps/control-room/**"
       - ".github/workflows/control-api.yml"
   workflow_dispatch:
     inputs:
@@ -21,7 +25,7 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  control-api:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,12 +40,44 @@ jobs:
           enable-cache: true
           working-directory: services/control-api
       - run: uv sync --all-groups
-      - run: uv run python -m unittest discover -s tests -v
+      - run: uv run python -m pytest
       - run: uv run pywrangler sync
+
+  gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          working-directory: gateway
+      - run: uv sync --all-groups
+      - run: uv run python -m pytest
+      - run: uv run python -m compileall -q src
+
+  control-room:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/control-room
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/control-room/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
 
   deploy:
     if: github.event_name == 'workflow_dispatch' && inputs.deploy
-    needs: validate
+    needs: control-api
     runs-on: ubuntu-latest
     defaults:
       run:

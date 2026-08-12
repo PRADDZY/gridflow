@@ -10,14 +10,6 @@ const jwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 export async function controllerIdentity(
   request: Request,
 ): Promise<string | ControllerAccessFailure> {
-  if (process.env.GRIDFLOW_DEMO_MODE === "true") {
-    const demoIdentity = process.env.GRIDFLOW_DEMO_CONTROLLER_ID;
-    if (!demoIdentity) {
-      return { status: 503, detail: "Demo controller identity is not configured." };
-    }
-    return demoIdentity;
-  }
-
   const issuer = process.env.CF_ACCESS_TEAM_DOMAIN;
   const audience = process.env.CF_ACCESS_AUD;
   const allowedEmails = process.env.CF_ACCESS_ALLOWED_EMAILS;

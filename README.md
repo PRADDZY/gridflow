@@ -1,101 +1,77 @@
 # GridFlow
 
-GridFlow is a race-day queue-safety control room for Grand Prix venues. It
-turns approved CCTV observations into confidence-aware recommendations for an
-event controller, steward coordination, and digital signage. It is decision
-support: models never instruct staff or publish signage on their own.
-
-## What is implemented
+GridFlow is a Grand Prix egress-planning prototype rebuilt around an explicit
+external-reference boundary. It uses the public Iowa Department of
+Transportation camera `DQTV17` to demonstrate real-time, vehicle-only video
+analytics without claiming that data represents a race venue or using it to
+direct venue operations.
 
 ```text
-Approved RTSP camera
+Iowa DOT public camera metadata
         |
-Venue gateway -> Hugging Face detector + density endpoints
+Local HLS frame capture -> local RT-DETR vehicle detection
         |
-Signed observation
+Signed external-reference observation
         |
-Cloudflare FastAPI Worker -> event Durable Object -> controller dashboard
-                                                    -> approved signage payload
+Cloudflare FastAPI Worker -> ReferenceState Durable Object
+        |
+GridFlow dashboard: live video, vehicle aggregates, audit, real map
 ```
 
-- `apps/control-room`: Next.js operator board and public display surface,
-  deployed with OpenNext for Cloudflare.
-- `services/control-api`: FastAPI Python Worker. It verifies HMAC-signed
-  ingress, fails closed on stale or uncertain evidence, and stores the latest
-  recommendation plus its controller decision per event in a Durable Object.
-- `gateway`: venue-side RTSP capture, Hugging Face endpoint client, response
-  validation, and signed Control API submission.
+## Components
 
-## Safety boundaries
+- `gateway`: Docker-ready HLS gateway. It validates the Iowa DOT source,
+  captures one frame in memory every 10 seconds, runs `PekingU/rtdetr_r50vd`
+  locally, and posts vehicle-class aggregates. See [gateway/README.md](gateway/README.md).
+- `services/control-api`: FastAPI Python Worker. Reference observations use a
+  dedicated signed ingress path and `ReferenceState` Durable Object; they are
+  structurally separate from the retained future venue-control pipeline.
+- `apps/control-room`: Next.js interface showing the live HLS source, external
+  attribution, vehicle-only metrics, audit samples, and a real map with Monza
+  planning context plus the actual Iowa camera location.
 
-- Camera frames stay at the venue gateway except for the configured, approved
-  Hugging Face inference endpoints. Camera credentials never enter Cloudflare.
-- A camera older than 25 seconds, low model confidence, or detector/density
-  disagreement results in `review`, not an operational directive.
-- Every recommendation declares `requires_human_approval: true`.
-- Every new observation clears the prior controller decision. An approval only
-  applies to the exact recommendation identifier it reviewed.
-- The dashboard validates a Cloudflare Access JWT before it can read or publish
-  a decision; the authenticated Access email becomes the decision's audit
-  identity. The public display receives only an allow-listed approved message,
-  never raw queue data.
-- Dashboard read and action tokens are separate. Gateway ingress is protected
-  by a distinct short-lived HMAC signature.
-- In the deployed Cloudflare environment, the dashboard uses a Worker service
-  binding to the Control API; it does not make an internal call through the
-  public `workers.dev` hostname.
-- The optional synthetic gateway mode exists only to test the signed control
-  loop. It labels synthetic estimates in the model metadata and must never be
-  used for a live event decision.
+## Boundaries
 
-## Run locally
+- The source is always `external_reference`; it is not a venue camera.
+- The gateway stores no HLS frames or video segments. RT-DETR runs locally and
+  only vehicle aggregate data leaves the host.
+- The reference route contains no people count, crowd density, capacity, risk,
+  signage, stewarding, or controller-action fields.
+- The dashboard has no approve, publish, assignment, notification, or fake
+  incident controls. Legacy venue-control routes remain hidden and Cloudflare
+  Access-protected for a future authorised integration.
+- The public source is attributed to Iowa DOT under CC BY 4.0. The live source
+  is revalidated by the opt-in integration test before deployment.
 
-```powershell
-cd apps/control-room
-npm.cmd install
-npm.cmd run dev
-```
-
-The operator board is at `http://localhost:3000`; the signage page is at
-`http://localhost:3000/display`.
+## Verify locally
 
 ```powershell
 cd services/control-api
 uv sync --all-groups
-uv run python -m unittest discover -s tests -v
+uv run python -m pytest
 
 cd ..\..\gateway
-uv sync
-uv run python -m unittest discover -s tests -v
+uv sync --extra vision --all-groups
+uv run python -m pytest
+$env:GRIDFLOW_RUN_LIVE_TESTS = "true"
+$env:GRIDFLOW_RUN_MODEL_TESTS = "true"
+uv run python -m pytest tests/test_live_iowa_source.py
+
+cd ..\apps\control-room
+npm.cmd ci
+npm.cmd run lint
+npm.cmd run test
+npm.cmd run build
 ```
 
-## Production handoff
+## Deploy
 
-1. Deploy the Control API from Linux or use the manual GitHub Actions workflow
-   after setting `CLOUDFLARE_API_TOKEN` as a repository secret.
-2. Configure the deployed API with distinct `INGESTION_HMAC_SECRET`,
-   `CONTROLLER_READ_TOKEN`, and `CONTROLLER_ACTION_TOKEN` secrets.
-3. Create a Cloudflare Access application for the controller dashboard and
-   configure the control room's `CONTROL_API_URL`, `CONTROL_API_READ_TOKEN`,
-   `CONTROL_API_ACTION_TOKEN`, `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, and
-   `CF_ACCESS_ALLOWED_EMAILS` secrets. The Access audience must match the
-   controller application, and the allow-list must contain only approved event
-   controllers.
-4. Create authenticated Hugging Face Inference Endpoints for the detector and
-   density model, then configure the venue gateway environment documented in
-   [gateway/README.md](gateway/README.md).
-5. Complete camera placement, calibration, privacy review, controller runbook
-   training, and a supervised dry run before live event use.
+1. Deploy `services/control-api` with the `v2` Durable Object migration and
+   configure `INGESTION_HMAC_SECRET` plus a controller read token.
+2. Configure the dashboard's `CONTROL_API_READ_TOKEN` and deploy the
+   Cloudflare Worker with its service binding.
+3. Run the gateway container with the same ingress secret and Control API URL.
+4. Verify source metadata, HLS playback, a local model sample, a signed
+   reference observation, and dashboard freshness before treating it as live.
 
-## Deployed demo mode
-
-For the test deployment, configure `GRIDFLOW_DEMO_MODE=true` and a
-`GRIDFLOW_DEMO_CONTROLLER_ID`. This deliberately bypasses Cloudflare Access
-only for the synthetic demo and must be removed before any live event. The
-demo is not a production-ready safety system.
-
-## Demo media
-
-The current board includes a Pexels queue-video still solely for the visual
-demo. Production use replaces it with an approved camera gateway. The source
-brief is retained as `8a6e32e7-ff3e-4827-ba14-89e12bfc52eb.pdf`.
+The source brief remains at `8a6e32e7-ff3e-4827-ba14-89e12bfc52eb.pdf`.
