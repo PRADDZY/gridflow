@@ -1,64 +1,67 @@
-# GridFlow Venue Gateway
+# GridFlow Reference Gateway
 
-This process runs at the venue boundary, where it can access an approved RTSP
-camera source. It sends one JPEG frame to authenticated Hugging Face inference
-endpoints, validates both responses, and signs the derived observation for the
-GridFlow Control API. It never sends camera credentials to Cloudflare.
+This gateway samples the public Iowa Department of Transportation camera
+`DQTV17` and runs `PekingU/rtdetr_r50vd` locally. It sends only vehicle-class
+counts, confidence, inference latency, and a one-minute flow delta to the
+GridFlow Control API. The source is always marked `external_reference`; it is
+not a venue camera and cannot trigger signage, stewarding, or capacity actions.
+
+The gateway queries Iowa DOT's public traffic-camera feature service for the
+current HLS URL. It allows only `*.iowadot.gov` video hosts, verifies the
+returned camera identifier, captures one HLS frame in memory, and never writes
+frames or playlist segments to disk. The model is downloaded once into the
+local Hugging Face cache and inference happens in the gateway process.
 
 ## Required configuration
 
 ```text
 CONTROL_API_URL=https://your-control-api.workers.dev
 INGESTION_HMAC_SECRET=<same secret configured on the Control API>
-HF_TOKEN=hf_...
-HF_DETECTOR_ENDPOINT=https://<dedicated-detector-endpoint>
-HF_DENSITY_ENDPOINT=https://<dedicated-density-endpoint>
 ```
 
-`HF_DETECTOR_ENDPOINT` uses Hugging Face's object-detection response shape.
-The detection model defaults to `PekingU/rtdetr_r50vd`. The density endpoint
-must return this narrow JSON contract:
+Optional settings:
 
-```json
-{"people_count": 436, "confidence": 0.88}
+```text
+REFERENCE_SOURCE_ID=iowa-dq-dqtv17
+IOWA_CAMERA_ID=DQTV17
+DETECTOR_MODEL=PekingU/rtdetr_r50vd
+DETECTOR_REVISION=main
+DETECTOR_THRESHOLD=0.5
+POLL_INTERVAL_SECONDS=10
 ```
 
-The gateway rejects malformed inference responses and does not post a partial
-observation. The Control API separately downgrades stale, low-confidence, or
-disagreeing estimates to controller review.
+No Hugging Face access token, remote inference endpoint, RTSP credential, or
+synthetic-data setting is used by this runtime path.
 
-## Test environment
+## Run and test
 
-The repository also includes a synthetic submission path for a non-production
-demo. It does not invoke a camera or model and marks both estimates as
-`synthetic-*`; it exists to exercise the signed ingestion and controller
-workflow without presenting test data as vision output.
+```powershell
+uv sync --extra vision --all-groups
+uv run python -m pytest
+
+$env:GRIDFLOW_RUN_LIVE_TESTS = "true"
+$env:GRIDFLOW_RUN_MODEL_TESTS = "true"
+uv run python -m pytest tests/test_live_iowa_source.py
+
+uv run gridflow-gateway monitor-reference --once
+uv run gridflow-gateway monitor-reference
+```
+
+The default test suite uses deterministic metadata and detection fixtures.
+The opt-in test verifies the live Iowa DOT metadata feed, its HLS playlist, and
+local RT-DETR execution on one current public frame.
+
+## Container deployment
+
+The included `Dockerfile` installs the `vision` extra. `docker-compose.yml`
+keeps the model cache in a named volume and samples every 10 seconds:
 
 ```powershell
 $env:CONTROL_API_URL = "https://your-control-api.workers.dev"
-$env:INGESTION_HMAC_SECRET = "the-demo-ingress-secret"
-uv run gridflow-gateway submit-synthetic
+$env:INGESTION_HMAC_SECRET = "replace-with-the-shared-ingress-secret"
+docker compose up --build -d
 ```
 
-For an RTSP transport-only test, use a local MediaMTX server and publish a
-test stream to `rtsp://localhost:8554/gridflow-demo`. MediaMTX supports RTSP
-publish/read paths and is appropriate for validating the gateway's RTSP
-boundary; it does not make the synthetic test data production-safe.
-
-## Run
-
-```powershell
-uv sync --extra rtsp
-uv run python -m unittest discover -s tests -v
-uv run gridflow-gateway submit-rtsp `
-  --source "rtsp://camera.example/stream" `
-  --event-id monza-2026 `
-  --camera-id cam-04 `
-  --zone-id south-exit `
-  --capacity 520 `
-  --queue-change-per-minute 18
-```
-
-Use a dedicated authenticated Hugging Face Inference Endpoint for production,
-with the model revision recorded in `HF_DETECTOR_REVISION` and
-`HF_DENSITY_REVISION`.
+For any operational venue deployment, use an authorised camera source and a
+separate, reviewed control path. This reference gateway intentionally has no
+venue-control input or output.

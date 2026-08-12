@@ -1,30 +1,53 @@
 from datetime import datetime
 import os
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
-class ModelEstimate(BaseModel):
+class VehicleClassCounts(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    model: str = Field(min_length=3, max_length=128)
-    revision: str = Field(min_length=3, max_length=128)
-    people_count: int = Field(ge=0, le=100_000)
+    car: int = Field(ge=0, le=100_000)
+    truck: int = Field(ge=0, le=100_000)
+    bus: int = Field(ge=0, le=100_000)
+    motorcycle: int = Field(ge=0, le=100_000)
+
+    @property
+    def total(self) -> int:
+        return self.car + self.truck + self.bus + self.motorcycle
+
+
+class ReferenceCamera(BaseModel):
+    """Public traffic-camera metadata for the external reference analytics mode."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9-]+$")
+    source_mode: Literal["external_reference"] = "external_reference"
+    provider: str = Field(min_length=3, max_length=160)
+    attribution: str = Field(min_length=3, max_length=240)
+    camera_id: str = Field(min_length=3, max_length=80)
+    name: str = Field(min_length=3, max_length=240)
+    route: str = Field(min_length=2, max_length=120)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    video_url: HttpUrl
+
+
+class ReferenceObservation(BaseModel):
+    """Vehicle-only public-camera observation; it cannot describe venue operations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: ReferenceCamera
+    captured_at: datetime
+    detector_model: str = Field(min_length=3, max_length=160)
+    detector_revision: str = Field(min_length=1, max_length=160)
+    class_counts: VehicleClassCounts
     confidence: float = Field(ge=0, le=1)
     inference_ms: int = Field(ge=0, le=120_000)
-
-
-class QueueObservation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    event_id: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9-]+$")
-    camera_id: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9-]+$")
-    zone_id: str = Field(min_length=3, max_length=80, pattern=r"^[a-z0-9-]+$")
-    captured_at: datetime
-    capacity: int = Field(ge=1, le=100_000)
-    queue_change_per_minute: float = Field(ge=-10_000, le=10_000)
-    detector: ModelEstimate
-    density: ModelEstimate
+    flow_delta_60s: float = Field(ge=-100_000, le=100_000)
 
 
 class ControlApiSettings(BaseModel):
@@ -34,48 +57,30 @@ class ControlApiSettings(BaseModel):
     ingestion_hmac_secret: str = Field(min_length=16)
 
 
-class GatewaySettings(ControlApiSettings):
-    hf_token: str = Field(min_length=8)
-    hf_detector_endpoint: HttpUrl
-    hf_density_endpoint: HttpUrl
+class ReferenceGatewaySettings(ControlApiSettings):
+    source_id: str = "iowa-dq-dqtv17"
+    iowa_camera_id: str = "DQTV17"
     detector_model: str = "PekingU/rtdetr_r50vd"
-    detector_revision: str = "configured-endpoint"
-    density_model: str = "venue-density-v1"
-    density_revision: str = "configured-endpoint"
+    detector_revision: str = "main"
+    detector_threshold: float = Field(default=0.5, ge=0, le=1)
+    poll_interval_seconds: int = Field(default=10, ge=5, le=300)
 
     @classmethod
-    def from_environment(cls) -> "GatewaySettings":
+    def from_environment(cls) -> "ReferenceGatewaySettings":
         return cls(
             control_api_url=_require("CONTROL_API_URL"),
             ingestion_hmac_secret=_require("INGESTION_HMAC_SECRET"),
-            hf_token=_require("HF_TOKEN"),
-            hf_detector_endpoint=_require("HF_DETECTOR_ENDPOINT"),
-            hf_density_endpoint=_require("HF_DENSITY_ENDPOINT"),
-            detector_model=os.getenv("HF_DETECTOR_MODEL", "PekingU/rtdetr_r50vd"),
-            detector_revision=os.getenv("HF_DETECTOR_REVISION", "configured-endpoint"),
-            density_model=os.getenv("HF_DENSITY_MODEL", "venue-density-v1"),
-            density_revision=os.getenv("HF_DENSITY_REVISION", "configured-endpoint"),
-        )
-
-
-class SyntheticGatewaySettings(ControlApiSettings):
-    model_config = ConfigDict(extra="forbid")
-
-    detector_model: str = "synthetic-person-detector"
-    detector_revision: str = "demo-v1"
-    density_model: str = "synthetic-density-estimator"
-    density_revision: str = "demo-v1"
-
-    @classmethod
-    def from_environment(cls) -> "SyntheticGatewaySettings":
-        return cls(
-            control_api_url=_require("CONTROL_API_URL"),
-            ingestion_hmac_secret=_require("INGESTION_HMAC_SECRET"),
+            source_id=os.getenv("REFERENCE_SOURCE_ID", "iowa-dq-dqtv17"),
+            iowa_camera_id=os.getenv("IOWA_CAMERA_ID", "DQTV17"),
+            detector_model=os.getenv("DETECTOR_MODEL", "PekingU/rtdetr_r50vd"),
+            detector_revision=os.getenv("DETECTOR_REVISION", "main"),
+            detector_threshold=float(os.getenv("DETECTOR_THRESHOLD", "0.5")),
+            poll_interval_seconds=int(os.getenv("POLL_INTERVAL_SECONDS", "10")),
         )
 
 
 def _require(name: str) -> str:
     value = os.getenv(name)
     if not value:
-        raise RuntimeError(f"{name} must be configured for the venue gateway.")
+        raise RuntimeError(f"{name} must be configured for the reference analytics gateway.")
     return value
