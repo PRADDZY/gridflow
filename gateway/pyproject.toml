@@ -1,0 +1,26 @@
+[project]
+name = "gridflow-edge-gateway"
+version = "0.1.0"
+description = "Venue-side RTSP to Hugging Face to GridFlow observation gateway"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28,<1",
+    "pydantic>=2.10,<3",
+    "typer>=0.15,<1",
+]
+
+[project.optional-dependencies]
+rtsp = [
+    "opencv-python-headless>=4.10,<5",
+]
+
+[project.scripts]
+gridflow-gateway = "gridflow_gateway.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gridflow_gateway"]
